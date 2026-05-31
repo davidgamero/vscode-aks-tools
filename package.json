@@ -17,8 +17,13 @@
         "virtualWorkspaces": true
     },
     "license": "MIT",
+    "enabledApiProposals": [
+        "chatParticipantAdditions"
+    ],
     "categories": [
-        "Azure"
+        "Azure",
+        "AI",
+        "Chat"
     ],
     "keywords": [
         "kubernetes",
@@ -192,6 +197,11 @@
                     "type": "string",
                     "default": "copilot",
                     "description": "Default language model vendor for Container Assist (e.g. copilot)."
+                },
+                "aks.kickstart.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable the Kickstart agent for AI-guided AKS Automatic deployment onboarding."
                 },
                 "aks.aksmcpserver.releaseTag": {
                     "type": "string",
@@ -1023,6 +1033,51 @@
                 "id": "aks.manageClusterSubMenu",
                 "label": "%Manage Cluster%"
             }
+        ],
+        "chatAgents": [
+            {
+                "name": "kickstart",
+                "description": "AI-guided onboarding to deploy your app on AKS Automatic. Walks you through discover, design, generate, review, handoff, and deploy.",
+                "path": "./agents/kickstart.agent.md",
+                "when": "config.aks.kickstart.enabled == true"
+            },
+            {
+                "name": "kickstart-reviewer",
+                "description": "Internal agent: Reviews Kickstart-generated deployment artifacts for correctness, security, and AKS Automatic compliance. Invoked by kickstart only.",
+                "path": "./agents/kickstart-reviewer.agent.md"
+            }
+        ],
+        "chatSkills": [
+            { "path": "./skills/kickstart-discover/SKILL.md" },
+            { "path": "./skills/kickstart-design/SKILL.md" },
+            { "path": "./skills/kickstart-generate/SKILL.md" },
+            { "path": "./skills/kickstart-review/SKILL.md" },
+            { "path": "./skills/kickstart-handoff/SKILL.md" },
+            { "path": "./skills/kickstart-deploy/SKILL.md" },
+            { "path": "./skills/kickstart-aks-automatic/SKILL.md" },
+            { "path": "./skills/kickstart-gateway-api/SKILL.md" },
+            { "path": "./skills/kickstart-workload-identity/SKILL.md" },
+            { "path": "./skills/kickstart-acr-integration/SKILL.md" },
+            { "path": "./skills/kickstart-kaito-gpu/SKILL.md" },
+            { "path": "./skills/kickstart-aks-terminology/SKILL.md" },
+            { "path": "./skills/kickstart-deployment-safeguards/SKILL.md" },
+            { "path": "./skills/kickstart-bicep-authoring/SKILL.md" },
+            { "path": "./skills/kickstart-security-hardening/SKILL.md" },
+            { "path": "./skills/kickstart-deployment-review/SKILL.md" },
+            { "path": "./skills/kickstart-resource-management/SKILL.md" },
+            { "path": "./skills/kickstart-networking/SKILL.md" },
+            { "path": "./skills/kickstart-cost-estimation/SKILL.md" },
+            { "path": "./skills/kickstart-monitoring/SKILL.md" },
+            { "path": "./skills/kickstart-arm-basics/SKILL.md" },
+            { "path": "./skills/kickstart-azure-identity/SKILL.md" },
+            { "path": "./skills/kickstart-github-actions-oidc/SKILL.md" },
+            { "path": "./skills/kickstart-github-actions-workflow/SKILL.md" },
+            { "path": "./skills/kickstart-github-pr-conventions/SKILL.md" },
+            { "path": "./skills/kickstart-phase-acceleration/SKILL.md" },
+            { "path": "./skills/kickstart-teach-then-ask/SKILL.md" },
+            { "path": "./skills/kickstart-collaborator-voice/SKILL.md" },
+            { "path": "./skills/kickstart-file-generation/SKILL.md" },
+            { "path": "./skills/kickstart-safeguard-checklist/SKILL.md" }
         ]
     },
     "scripts": {
