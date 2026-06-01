@@ -39,19 +39,41 @@ Validate every generated artifact against security, correctness, and AKS Automat
 ## Process
 1. Invoke `/kickstart-safeguard-checklist` to run the full safeguard rule set (13 rules including DS008-DS013 for production).
 2. Invoke `/kickstart-security-hardening` for security checks.
-3. Run automated validation using `runCommands`:
+3. Run automated validation using `run_in_terminal`:
    ```bash
-   # Validate K8s manifests against schemas
    kubectl apply --dry-run=client -f k8s/
-   
-   # Validate Bicep templates
    az bicep build --file infra/main.bicep
-   
-   # Lint Dockerfile (if hadolint available)
    hadolint Dockerfile
    ```
+   Use `get_terminal_output` to read results.
 4. Present results as PASS ✓ / FAIL ✗ / WARN ⚠ for each item.
-5. If any FAIL: fix before proceeding. If WARN only: note and proceed.
+5. If any FAIL items, use `vscode_askQuestions` to decide next steps:
+   ```json
+   {
+     "questions": [{
+       "header": "Review failures",
+       "question": "Some checks failed. How do you want to proceed?",
+       "options": [
+         { "label": "Fix all failures automatically", "recommended": true },
+         { "label": "Show me the details first" },
+         { "label": "Skip and proceed anyway" }
+       ]
+     }]
+   }
+   ```
+6. If WARN only, use `vscode_askQuestions` to confirm proceeding:
+   ```json
+   {
+     "questions": [{
+       "header": "Warnings found",
+       "question": "All checks pass but there are warnings. Continue to Handoff?",
+       "options": [
+         { "label": "Continue — warnings are acceptable", "recommended": true },
+         { "label": "Show me the warnings first" }
+       ]
+     }]
+   }
+   ```
 
 ## Exit Criteria
 - All checks pass (no FAIL items remaining).

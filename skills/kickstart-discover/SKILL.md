@@ -6,27 +6,67 @@ disable-model-invocation: true
 
 # Discover Phase
 
-Collect enough information about the user's application to propose a deployment architecture.
+Collect enough information about the user's application to propose a deployment architecture. Use `vscode_askQuestions` for every question — present choices whenever possible.
 
 ## What to Collect
 
 | Item | How to get it |
 |------|--------------|
-| App name | Ask |
-| Language / framework | Ask, or infer from package.json / requirements.txt / go.mod / *.csproj |
-| Dependencies | Ask: databases, caches, queues, external APIs |
-| Port | Ask, or infer from code (e.g., `app.listen(3000)`) |
-| Environment variables | Ask, or infer from `.env.example` / code |
-| Existing Dockerfile | Search workspace for `Dockerfile` |
-| Existing CI/CD | Search workspace for `.github/workflows/`, `azure-pipelines.yml`, `Jenkinsfile` |
-| Source repo | Ask or infer from git remote |
+| App name | `vscode_askQuestions` with `allowFreeformInput: true` |
+| Language / framework | Infer from workspace files first, then confirm via `vscode_askQuestions` with detected options |
+| Dependencies | `vscode_askQuestions` multi-select: databases, caches, queues, external APIs |
+| Port | Infer from code, confirm via `vscode_askQuestions` with detected value + "Other" |
+| Environment variables | Infer from `.env.example` / code, confirm via `vscode_askQuestions` |
+| Existing Dockerfile | Search workspace — no question needed |
+| Existing CI/CD | Search workspace — no question needed |
+| Source repo | Infer from git remote — no question needed |
 
 ## Conversation Strategy
 
-- Ask 2–3 questions at a time, not all at once.
-- If the user shares a manifest file (package.json, requirements.txt, etc.), extract details automatically and confirm.
-- Infer reasonable defaults and confirm: "I see this is a Node.js app on port 3000 — is that right?"
-- Use the search and codebase tools to look for clues before asking.
+- **Always use `vscode_askQuestions`** to collect information. Never ask questions in plain markdown and wait for free-text replies.
+- Before asking, use `search` and `codebase` tools to auto-detect answers. Then present what you found as pre-selected options for confirmation.
+- Ask one question at a time. Each `vscode_askQuestions` call should have one focused question with concrete options.
+- When the answer space is bounded (language, framework, database type), provide a curated option list. Mark the detected/recommended option with `recommended: true`.
+- When the answer is open-ended (app name, custom port), use `allowFreeformInput: true`.
+
+### Example — Language Detection
+
+After scanning the workspace and finding `package.json`:
+```json
+{
+  "questions": [{
+    "header": "Framework",
+    "question": "I found a package.json — which framework does your app use?",
+    "options": [
+      { "label": "Express.js", "recommended": true },
+      { "label": "Next.js" },
+      { "label": "Fastify" },
+      { "label": "NestJS" }
+    ],
+    "allowFreeformInput": true
+  }]
+}
+```
+
+### Example — Dependencies
+
+```json
+{
+  "questions": [{
+    "header": "Dependencies",
+    "question": "Which backing services does your app need?",
+    "multiSelect": true,
+    "options": [
+      { "label": "PostgreSQL" },
+      { "label": "Redis" },
+      { "label": "Azure Service Bus" },
+      { "label": "Azure Blob Storage" },
+      { "label": "MongoDB" },
+      { "label": "None" }
+    ]
+  }]
+}
+```
 
 ## Exit Criteria
 

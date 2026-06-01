@@ -49,6 +49,21 @@ Create all deployment artifacts and write them to the workspace.
 - Compute ALL file contents before writing any. Then write all files. Then report what was created.
 - Never use `:latest` tags.
 - All K8s manifests must comply with AKS deployment safeguards.
+- Use `run_in_terminal` for any validation commands (e.g., linting generated files).
+- After writing all files, use `vscode_askQuestions` to confirm:
+  ```json
+  {
+    "questions": [{
+      "header": "Files generated",
+      "question": "All artifacts have been written. Ready to review them?",
+      "options": [
+        { "label": "Yes, start the review", "recommended": true },
+        { "label": "Show me what was created first" },
+        { "label": "I want to make changes" }
+      ]
+    }]
+  }
+  ```
 
 ## Exit Criteria
 - All artifacts written to workspace.

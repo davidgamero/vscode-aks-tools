@@ -48,7 +48,27 @@ Present a clear summary with these sections:
 | "How much will this cost?" | Invoke `/kickstart-cost-estimation` for a detailed estimate. |
 | "Can I use my existing CI/CD?" | Yes, but we recommend GitHub Actions with OIDC for passwordless Azure auth. |
 
+## Approval via vscode_askQuestions
+
+After presenting the architecture, use `vscode_askQuestions` to get approval:
+
+```json
+{
+  "questions": [{
+    "header": "Architecture",
+    "question": "Does this architecture look right for your app?",
+    "options": [
+      { "label": "Approve — generate artifacts", "recommended": true },
+      { "label": "I have questions first" },
+      { "label": "I want to change something" }
+    ]
+  }]
+}
+```
+
+If the user selects "I have questions first" or "I want to change something", address their concerns and then re-present the approval question.
+
 ## Exit Criteria
 
-- User explicitly approves the proposed architecture.
+- User explicitly approves the proposed architecture (via `vscode_askQuestions` selection).
 - Announce: "Architecture approved — moving to the Generate phase."

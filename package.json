@@ -495,6 +495,11 @@
                 "command": "aks.switchToStructuredMenu",
                 "title": "%Switch to Grouped Menu%",
                 "category": "AKS"
+            },
+            {
+                "command": "aks.kickstartFocus",
+                "title": "AKS: Launch Kickstart Agent",
+                "category": "AKS"
             }
         ],
         "menus": {
@@ -546,6 +551,10 @@
                 {
                     "command": "aks.deployAppWithAutomatedPipelineFromTree",
                     "when": "never"
+                },
+                {
+                    "command": "aks.kickstartFocus",
+                    "when": "config.aks.kickstart.enabled == true"
                 }
             ],
             "explorer/context": [
@@ -1044,40 +1053,41 @@
             {
                 "name": "kickstart-reviewer",
                 "description": "Internal agent: Reviews Kickstart-generated deployment artifacts for correctness, security, and AKS Automatic compliance. Invoked by kickstart only.",
-                "path": "./agents/kickstart-reviewer.agent.md"
+                "path": "./agents/kickstart-reviewer.agent.md",
+                "when": "config.aks.kickstart.enabled == true"
             }
         ],
         "chatSkills": [
-            { "path": "./skills/kickstart-discover/SKILL.md" },
-            { "path": "./skills/kickstart-design/SKILL.md" },
-            { "path": "./skills/kickstart-generate/SKILL.md" },
-            { "path": "./skills/kickstart-review/SKILL.md" },
-            { "path": "./skills/kickstart-handoff/SKILL.md" },
-            { "path": "./skills/kickstart-deploy/SKILL.md" },
-            { "path": "./skills/kickstart-aks-automatic/SKILL.md" },
-            { "path": "./skills/kickstart-gateway-api/SKILL.md" },
-            { "path": "./skills/kickstart-workload-identity/SKILL.md" },
-            { "path": "./skills/kickstart-acr-integration/SKILL.md" },
-            { "path": "./skills/kickstart-kaito-gpu/SKILL.md" },
-            { "path": "./skills/kickstart-aks-terminology/SKILL.md" },
-            { "path": "./skills/kickstart-deployment-safeguards/SKILL.md" },
-            { "path": "./skills/kickstart-bicep-authoring/SKILL.md" },
-            { "path": "./skills/kickstart-security-hardening/SKILL.md" },
-            { "path": "./skills/kickstart-deployment-review/SKILL.md" },
-            { "path": "./skills/kickstart-resource-management/SKILL.md" },
-            { "path": "./skills/kickstart-networking/SKILL.md" },
-            { "path": "./skills/kickstart-cost-estimation/SKILL.md" },
-            { "path": "./skills/kickstart-monitoring/SKILL.md" },
-            { "path": "./skills/kickstart-arm-basics/SKILL.md" },
-            { "path": "./skills/kickstart-azure-identity/SKILL.md" },
-            { "path": "./skills/kickstart-github-actions-oidc/SKILL.md" },
-            { "path": "./skills/kickstart-github-actions-workflow/SKILL.md" },
-            { "path": "./skills/kickstart-github-pr-conventions/SKILL.md" },
-            { "path": "./skills/kickstart-phase-acceleration/SKILL.md" },
-            { "path": "./skills/kickstart-teach-then-ask/SKILL.md" },
-            { "path": "./skills/kickstart-collaborator-voice/SKILL.md" },
-            { "path": "./skills/kickstart-file-generation/SKILL.md" },
-            { "path": "./skills/kickstart-safeguard-checklist/SKILL.md" }
+            { "path": "./skills/kickstart-discover/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-design/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-generate/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-review/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-handoff/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-deploy/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-aks-automatic/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-gateway-api/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-workload-identity/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-acr-integration/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-kaito-gpu/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-aks-terminology/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-deployment-safeguards/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-bicep-authoring/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-security-hardening/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-deployment-review/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-resource-management/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-networking/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-cost-estimation/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-monitoring/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-arm-basics/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-azure-identity/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-github-actions-oidc/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-github-actions-workflow/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-github-pr-conventions/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-phase-acceleration/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-teach-then-ask/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-collaborator-voice/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-file-generation/SKILL.md", "when": "config.aks.kickstart.enabled == true" },
+            { "path": "./skills/kickstart-safeguard-checklist/SKILL.md", "when": "config.aks.kickstart.enabled == true" }
         ]
     },
     "scripts": {

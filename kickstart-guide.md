@@ -34,16 +34,17 @@ User selects "kickstart" agent in Copilot
 The main agent is gated by a VS Code setting:
 
 ```json
-"kickstart.enabled": true  // default
+"aks.kickstart.enabled": true  // default
 ```
 
-The `chatAgents` entry uses `"when": "config.kickstart.enabled == true"` so the agent only appears in the Copilot agent picker when the setting is enabled. The reviewer sub-agent has no `when` clause — it's internal and only reachable via handoff.
+The `chatAgents` entry uses `"when": "config.aks.kickstart.enabled == true"` so the agent only appears in the Copilot agent picker when the setting is enabled. The reviewer sub-agent has no `when` clause — it's internal and only reachable via handoff.
 
 ## Entry Points
 
 | Entry Point | How | What happens |
 |---|---|---|
 | **Agent picker** | User selects "kickstart" in Copilot's agent dropdown | Full agent prompt loads, starts at Phase 1 |
+| **Command palette** | User runs `AKS: Launch Kickstart Agent` (`aks.kickstartFocus`) | Hides sidebar/panel, opens chat, sends initial message to kickstart agent |
 | **Prompt file** | User runs `kickstart.prompt.md` from the prompt picker | Lightweight version — invokes `/kickstart-discover` and starts the flow |
 
 ## Agent Handoffs
@@ -66,16 +67,17 @@ Both handoffs are **user-initiated** — Copilot presents them as buttons, not a
 
 ## Phase Machine
 
-The main agent follows six phases in strict order. Each phase has a dedicated **phase skill** that contains the playbook.
+The main agent follows seven phases in strict order. Each phase has a dedicated **phase skill** that contains the playbook.
 
 | Phase | Skill | What it does | Exit criteria |
 |---|---|---|---|
 | 1. Discover | `/kickstart-discover` | Collect app name, language, framework, deps, port, env vars, Dockerfile/CI status | Enough info to propose architecture |
-| 2. Design | `/kickstart-design` | Propose AKS Automatic architecture, get user approval | User approves |
-| 3. Generate | `/kickstart-generate` | Create Dockerfile, K8s manifests, Bicep, GHA workflow | All files written to workspace |
-| 4. Review | `/kickstart-review` | Validate artifacts against safeguards + security | All checks pass |
-| 5. Handoff | `/kickstart-handoff` | Confirm Azure sub, RG, region, secrets, variables | User confirms all details |
-| 6. Deploy | `/kickstart-deploy` | Present deployment commands (never auto-deploy) | User has instructions |
+| 2. Configure | (inline in agent) | Create new or select existing Azure resources (RG, AKS cluster, ACR). Cluster creates with `--no-wait` | Resources selected/creating |
+| 3. Design | `/kickstart-design` | Propose AKS Automatic architecture, get user approval | User approves |
+| 4. Generate | `/kickstart-generate` | Create Dockerfile, K8s manifests, Bicep, GHA workflow | All files written to workspace |
+| 5. Review | `/kickstart-review` | Validate artifacts against safeguards + security | All checks pass |
+| 6. Pre-Deploy | `/kickstart-handoff` | Verify cluster ready, ACR attached, final summary | Cluster provisioned, user confirms |
+| 7. Deploy | `/kickstart-deploy` | Build, push, apply with `az` and `kubectl` | App running on AKS |
 
 ### Phase transitions
 - The agent announces each transition: *"Discovery complete — moving to the Design phase."*
@@ -86,7 +88,7 @@ The main agent follows six phases in strict order. Each phase has a dedicated **
 All 30 skills use `disable-model-invocation: true` — they only fire when explicitly invoked via `/skill-name` by an agent.
 
 ### Phase Skills (6)
-One per phase. Contains the step-by-step playbook.
+One per phase (Configure is inline in the agent prompt, not a separate skill).
 
 | Skill | Phase |
 |---|---|
@@ -94,7 +96,7 @@ One per phase. Contains the step-by-step playbook.
 | `kickstart-design` | Design |
 | `kickstart-generate` | Generate |
 | `kickstart-review` | Review |
-| `kickstart-handoff` | Handoff |
+| `kickstart-handoff` | Pre-Deploy Check |
 | `kickstart-deploy` | Deploy |
 
 ### Domain Skills (19)
@@ -112,7 +114,7 @@ Specialized knowledge loaded on demand by the phase skills.
 | `kickstart-bicep-authoring` | Bicep template patterns | Generate |
 | `kickstart-security-hardening` | Azure security defaults | Review |
 | `kickstart-deployment-review` | Artifact review checklist | Review |
-| `kickstart-resource-management` | Azure resource naming | Handoff |
+| `kickstart-resource-management` | Azure resource naming | Configure |
 | `kickstart-networking` | Azure networking concepts | Design |
 | `kickstart-cost-estimation` | Cost estimation via Retail Prices API | Design, Deploy |
 | `kickstart-monitoring` | Azure Monitor + Container Insights | Deploy |
@@ -147,7 +149,12 @@ Phase 1 — Discover
   └── /kickstart-discover
   └── /kickstart-teach-then-ask
 
-Phase 2 — Design
+Phase 2 — Configure Infrastructure
+  └── /kickstart-resource-management
+  └── /kickstart-cost-estimation (if user asks)
+  └── az CLI commands (az group create, az aks create, az acr create)
+
+Phase 3 — Design
   └── /kickstart-design
   └── /kickstart-aks-automatic
   └── /kickstart-gateway-api
@@ -155,7 +162,7 @@ Phase 2 — Design
   └── /kickstart-aks-terminology
   └── /kickstart-cost-estimation (if user asks)
 
-Phase 3 — Generate
+Phase 4 — Generate
   └── /kickstart-generate
   └── /kickstart-deployment-safeguards
   └── /kickstart-acr-integration
@@ -165,18 +172,19 @@ Phase 3 — Generate
   └── /kickstart-kaito-gpu (if GPU workload)
   └── /kickstart-file-generation
 
-Phase 4 — Review
+Phase 5 — Review
   └── /kickstart-review
   └── /kickstart-safeguard-checklist
   └── /kickstart-deployment-review
   └── /kickstart-security-hardening
   └── HANDOFF → kickstart-reviewer agent
 
-Phase 5 — Handoff
+Phase 6 — Pre-Deploy Check
   └── /kickstart-handoff
-  └── /kickstart-resource-management
+  └── az aks show (verify cluster ready)
+  └── az aks update --attach-acr
 
-Phase 6 — Deploy
+Phase 7 — Deploy
   └── /kickstart-deploy
   └── /kickstart-cost-estimation
   └── /kickstart-monitoring
@@ -195,14 +203,18 @@ The agents use VS Code Copilot's built-in tools (not custom extension tools):
 | `runCommands` | Run `az`, `kubectl`, `gh` CLI commands for validation and deployment |
 | `problems` | Check VS Code diagnostics panel for errors |
 | `usages` | Find code references |
+| `vscode_askQuestions` | Present interactive choice prompts to the user instead of waiting for free text |
+| `run_in_terminal` | Run shell commands in a persistent zsh terminal session (sync or async) |
+| `get_terminal_output` | Read output from a running terminal command |
+| `send_to_terminal` | Send input to interactive terminal prompts |
+| `kill_terminal` | Stop a running terminal session |
 
 ## File Layout
 
 ```
-packages/vscode-extension/
 ├── package.json                        # chatAgents + chatSkills + settings
 ├── tsconfig.json
-├── src/extension.ts                    # Empty activate/deactivate
+├── src/extension.ts                    # Activation + aks.kickstartFocus command
 ├── agents/
 │   ├── kickstart.agent.md              # Main agent (gated by kickstart.enabled)
 │   └── kickstart-reviewer.agent.md     # Internal reviewer sub-agent

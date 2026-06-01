@@ -1,47 +1,74 @@
 ---
 name: kickstart-handoff
-description: "Handoff phase playbook — confirm deployment target and prerequisites."
+description: "Pre-deploy check playbook — verify cluster readiness and ACR attachment before deployment."
 disable-model-invocation: true
 ---
 
-# Handoff Phase
+# Pre-Deploy Check
 
-Confirm the deployment target environment and verify all prerequisites before deploying.
+Verify that Azure infrastructure from the Configure phase is ready before deploying. This is the only phase that may block waiting on Azure.
 
-## Pre-Deployment Checklist
+## Cluster Readiness
 
-### Azure Environment
-- [ ] Subscription ID confirmed
-- [ ] Resource group name and region confirmed
-- [ ] AKS cluster name confirmed
-- [ ] ACR name confirmed
+Check the cluster provisioning state first:
+```bash
+az aks show --name <cluster> --resource-group <rg> --subscription <sub> --query "provisioningState" --output tsv
+```
 
-### GitHub Repository
-- [ ] Required secrets configured:
-  - `AZURE_CLIENT_ID`
-  - `AZURE_TENANT_ID`
-  - `AZURE_SUBSCRIPTION_ID`
-- [ ] Required variables configured:
-  - `ACR_NAME`
-  - `IMAGE_NAME`
-  - `AKS_CLUSTER_NAME`
-  - `AKS_RESOURCE_GROUP`
+### Already Succeeded
+Skip straight to ACR attachment.
 
-### Naming Conventions
-- Invoke `/kickstart-resource-management` for Azure naming guidance.
-- Resource group: `rg-<app>-<env>` (e.g., `rg-myapp-prod`)
-- AKS cluster: `aks-<app>-<env>`
-- ACR: `acr<app><env>` (no hyphens, globally unique)
+### Still Creating
+Use `az aks wait` instead of manual polling:
+```bash
+az aks wait --name <cluster> --resource-group <rg> --subscription <sub> --created --interval 30 --timeout 600
+```
+Tell the user: "Cluster is still provisioning. Waiting for it to finish — this usually takes a few more minutes."
 
-## Deployment Summary
+If it times out (10 min), check the state again and report the error.
 
-Generate a summary document listing:
-- All Azure resources to be created
-- All files that will be deployed
-- GitHub Actions workflow trigger
-- Estimated cost range (invoke `/kickstart-cost-estimation`)
+### Failed
+Show the error and use `vscode_askQuestions`:
+  ```json
+  {
+    "questions": [{
+      "header": "Cluster failed",
+      "question": "Cluster provisioning failed. What do you want to do?",
+      "options": [
+        { "label": "Retry creation", "recommended": true },
+        { "label": "Use a different cluster" },
+        { "label": "Cancel" }
+      ]
+    }]
+  }
+  ```
+
+## ACR Attachment
+
+Ensure the ACR is attached to the cluster:
+```bash
+az aks update --name <cluster> --resource-group <rg> --attach-acr <acr> --subscription <sub>
+```
+
+## Pre-Flight Summary
+
+Present a final summary of what will be deployed and use `vscode_askQuestions`:
+```json
+{
+  "questions": [{
+    "header": "Ready to deploy",
+    "question": "Everything looks good. Deploy now?",
+    "options": [
+      { "label": "Yes, deploy", "recommended": true },
+      { "label": "Review artifacts first" },
+      { "label": "Not yet" }
+    ]
+  }]
+}
+```
 
 ## Exit Criteria
-- User confirms all environment details.
-- All prerequisites verified.
-- Announce: "Handoff complete — ready for the Deploy phase."
+- Cluster provisioning state is `Succeeded`.
+- ACR is attached to the cluster.
+- User confirms readiness.
+- Announce: "Pre-deploy check complete — moving to Deploy."
