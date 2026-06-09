@@ -41,37 +41,58 @@ Seven phases in order. Announce each transition.
 Follow `/kickstart-discover`. Use `search` and `codebase` to auto-detect language, framework, ports, deps, Dockerfile, CI/CD before asking. Collect remaining details via `vscode_askQuestions`. Exit when you have enough to propose architecture.
 
 ### 2 — Configure Infrastructure
-Select or create Azure resources early so the cluster provisions in the background.
+Select or create Azure resources early so the cluster provisions in the background. Minimize terminal calls — combine read-only checks into single commands.
+
+**Step 1 — Subscription selection (one terminal call):**
+```bash
+az account list --query "[?state=='Enabled'].{name:name, id:id, isDefault:isDefault}" -o json
+```
+If the user has **multiple subscriptions**, present them via `vscode_askQuestions` with the current default marked as recommended. If only one, confirm it and move on.
 
 Ask create-new (default) vs use-existing via `vscode_askQuestions`.
 
-**Create new:** Get current subscription via `az account show`.
+**Create new:**
 
-Pre-flight checks before collecting resource details:
-
-1. **Provider registration:**
+**Step 2 — Set subscription + provider pre-flight (one terminal call):**
 ```bash
-az provider show --namespace Microsoft.ContainerService --subscription <sub> --query "registrationState" --output tsv
-az provider show --namespace Microsoft.ContainerRegistry --subscription <sub> --query "registrationState" --output tsv
+az account set --subscription "<sub>" && \
+az provider show --namespace Microsoft.ContainerService --query "registrationState" -o tsv && \
+az provider show --namespace Microsoft.ContainerRegistry --query "registrationState" -o tsv
 ```
-If `NotRegistered`, register: `az provider register --namespace Microsoft.ContainerService --subscription <sub>`
-
-2. **Quota-aware region selection** — check across candidate regions:
+If either returns `NotRegistered`, register in the same call:
 ```bash
-for region in eastus2 westus3 westeurope southeastasia; do az vm list-usage --location $region --subscription <sub> --output json --query "[?contains(name.value,'standardDSv3Family')].{region:'$region', available:limit-currentValue}" 2>/dev/null; done
+az provider register --namespace Microsoft.ContainerService && az provider register --namespace Microsoft.ContainerRegistry
 ```
-Only offer regions with ≥4 available vCPUs.
 
-Collect RG name, cluster name, ACR name in one `vscode_askQuestions` call (pre-fill: `rg-<app>-dev`, `aks-<app>-dev`, `acr<app>dev`). Check ACR name availability: `az acr check-name --name <acr>`. If taken, suggest alternative.
+Collect region, RG name, cluster name, ACR name in one `vscode_askQuestions` call (pre-fill defaults from app name: `rg-<app>-dev`, `aks-<app>-dev`, `acr<app>dev`).
 
-Then run:
-1. `az group create --name <rg> --location <region> --subscription <sub>`
-2. `az aks create --name <cluster> --resource-group <rg> --sku automatic --location <region> --subscription <sub> --generate-ssh-keys --no-wait` — use `run_in_terminal` in **async mode** so it doesn't block.
-3. `az acr create --name <acr> --resource-group <rg> --sku Basic --location <region> --subscription <sub>`
+**Step 3 — Validate quota + ACR name (one terminal call):**
+```bash
+az vm list-usage --location <region> -o json \
+  --query "[?contains(name.value,'Dldsv6') || contains(name.value,'Dldsv5') || contains(name.value,'Dadsv5') || contains(name.value,'Ddsv5') || contains(name.value,'Ddv5') || contains(name.value,'Ddv4') || contains(name.value,'DSv2') || contains(name.value,'Daldsv6') || contains(name.value,'Daldsv5')].{family:name.localizedValue, used:currentValue, limit:limit}" && \
+az acr check-name --name <acr> -o json
+```
+AKS Automatic needs **≥16 vCPUs** available in **at least one** of those families. If insufficient, link to the Azure Portal quota page: `https://portal.azure.com/#view/Microsoft_Azure_Capacity/QuotaMenuBlade/~/myQuotas` and suggest a different region. If ACR name is taken, suggest an alternative and re-check.
+
+**Step 4 — Create resources (two terminal calls):**
+```bash
+az group create --name <rg> --location <region> && \
+az acr create --name <acr> --resource-group <rg> --sku Basic --location <region>
+```
+Then start cluster creation async:
+```bash
+az aks create --name <cluster> --resource-group <rg> --sku automatic --location <region> --generate-ssh-keys --no-wait
+```
+Use `run_in_terminal` in **async mode** for the `az aks create` so it doesn't block.
 
 Move to Phase 3 immediately. Do NOT wait for cluster. Do NOT attach ACR yet.
 
-**Use existing:** List resources with `az account list`, `az group list`, `az aks list`, `az acr list` and present as picker options. If none found, offer to create.
+**Use existing:** List all resources in one call:
+```bash
+az aks list -o json --query "[].{name:name, rg:resourceGroup, location:location, sku:sku.name}" && \
+az acr list -o json --query "[].{name:name, rg:resourceGroup, location:location}"
+```
+Present as picker options via `vscode_askQuestions`. If none found, offer to create.
 
 ### 3 — Design
 Follow `/kickstart-design`. Present architecture summary (container strategy, AKS Automatic, Gateway API, Workload Identity, ACR, monitoring). Get user approval via `vscode_askQuestions`. Run cluster status check before transitioning.
