@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, KeyboardEvent as ReactKeyboardEvent } from "react";
 import * as l10n from "@vscode/l10n";
 import styles from "./SearchableDropdown.module.css";
 import { Lazy, asLazy, isLoading, orDefault } from "../utilities/lazy";
@@ -31,19 +31,17 @@ export interface SearchableDropdownProps<T> {
 
 export function SearchableDropdown<T>(props: SearchableDropdownProps<T>) {
     const lazyItems = asLazy(props.items);
-
-    if (isLoading(lazyItems)) {
-        return <ProgressRing />;
-    }
-
-    const rawItems = orDefault(lazyItems, [] as T[]);
-    return <SearchableDropdownInner {...props} rawItems={rawItems} />;
+    // Inner stays mounted while items load so a Lazy<T[]> transitioning loading -> loaded does not
+    // remount and silently discard open/search state.
+    return (
+        <SearchableDropdownInner {...props} rawItems={orDefault(lazyItems, [] as T[])} loading={isLoading(lazyItems)} />
+    );
 }
 
-type InnerProps<T> = SearchableDropdownProps<T> & { rawItems: T[] };
+type InnerProps<T> = SearchableDropdownProps<T> & { rawItems: T[]; loading: boolean };
 
 function SearchableDropdownInner<T>(props: InnerProps<T>) {
-    const { rawItems, getValue, toLabel, sortKey, selectedValue, onSelect, disabled } = props;
+    const { rawItems, getValue, toLabel, sortKey, selectedValue, onSelect, disabled, loading } = props;
 
     const [isOpen, setIsOpen] = useState(false);
     const [dropUp, setDropUp] = useState(false);
@@ -54,36 +52,33 @@ function SearchableDropdownInner<T>(props: InnerProps<T>) {
     const listboxRef = useRef<HTMLUListElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    const options: NormalizedOption[] = useMemo(
-        () =>
-            rawItems.map((item) => {
-                const label = (toLabel ?? getValue)(item);
-                return {
-                    value: getValue(item),
-                    label,
-                    sortKey: (sortKey ?? (() => label))(item),
-                };
-            }),
-        [rawItems, getValue, toLabel, sortKey],
-    );
+    // Computed directly rather than memoized: callers pass inline accessors (getValue={(s) => s}),
+    // so a useMemo keyed on them would be invalidated on every render anyway. These lists are
+    // dropdown-sized, so the map/sort below is not worth pushing useCallback onto every call site.
+    const options: NormalizedOption[] = rawItems.map((item) => {
+        const label = (toLabel ?? getValue)(item);
+        return {
+            value: getValue(item),
+            label,
+            sortKey: (sortKey ?? (() => label))(item),
+        };
+    });
 
     const selectedOption = options.find((o) => o.value === selectedValue) ?? null;
 
     // When open the input shows the live search text; when closed it shows the selected label.
     const inputText = isOpen ? searchText : (selectedOption?.label ?? "");
 
-    const filtered: NormalizedOption[] = useMemo(() => {
-        const matches = options
-            .map((option) => ({ option, match: fuzzyMatch(searchText, option.label) }))
-            .filter(({ match }) => match.matched);
-        matches.sort((a, b) => {
-            if (searchText !== "" && b.match.score !== a.match.score) {
-                return b.match.score - a.match.score;
-            }
-            return a.option.sortKey.localeCompare(b.option.sortKey);
-        });
-        return matches.map(({ option }) => option);
-    }, [options, searchText]);
+    const matches = options
+        .map((option) => ({ option, match: fuzzyMatch(searchText, option.label) }))
+        .filter(({ match }) => match.matched);
+    matches.sort((a, b) => {
+        if (searchText !== "" && b.match.score !== a.match.score) {
+            return b.match.score - a.match.score;
+        }
+        return a.option.sortKey.localeCompare(b.option.sortKey);
+    });
+    const filtered: NormalizedOption[] = matches.map(({ option }) => option);
 
     // Clamp the highlight into range for the current filtered list (derived, not stored).
     const safeHighlight = filtered.length === 0 ? 0 : Math.min(highlightedIndex, filtered.length - 1);
@@ -117,9 +112,11 @@ function SearchableDropdownInner<T>(props: InnerProps<T>) {
     }
 
     function openDropdown() {
-        if (disabled) return;
+        if (disabled || loading) return;
+        // Search resets to "" on open, so the list about to render is the unfiltered one. Index into
+        // `options` rather than `filtered`, which still reflects whatever searchText was last render.
         setSearchText("");
-        const currentIndex = filtered.findIndex((o) => o.value === selectedValue);
+        const currentIndex = options.findIndex((o) => o.value === selectedValue);
         setHighlightedIndex(currentIndex === -1 ? 0 : currentIndex);
         setIsOpen(true);
     }
@@ -151,7 +148,7 @@ function SearchableDropdownInner<T>(props: InnerProps<T>) {
     }
 
     function handleKeyDown(e: ReactKeyboardEvent) {
-        if (disabled) return;
+        if (disabled || loading) return;
 
         if (!isOpen) {
             if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter") {
@@ -208,37 +205,38 @@ function SearchableDropdownInner<T>(props: InnerProps<T>) {
         }
     }
 
-    const listboxId = props.id ? `${props.id}-list` : undefined;
-    const displayListbox = isOpen;
+    // Fall back to a generated id so aria-controls / aria-activedescendant are always wired up,
+    // even when the caller omits `id`.
+    const generatedId = useId();
+    const rootId = props.id ?? generatedId;
+    const listboxId = `${rootId}-list`;
+    const activeOptionId = isOpen && filtered[safeHighlight] ? `${rootId}-option-${safeHighlight}` : undefined;
+    const displayListbox = isOpen && !loading;
+
+    if (loading) {
+        return <ProgressRing />;
+    }
 
     return (
-        <div
-            role="combobox"
-            aria-expanded={isOpen}
-            aria-haspopup="listbox"
-            aria-controls={listboxId}
-            className={`${styles.dropdown} ${props.className ?? ""}`}
-            ref={containerRef}
-            onKeyDown={handleKeyDown}
-        >
+        <div className={`${styles.dropdown} ${props.className ?? ""}`} ref={containerRef} onKeyDown={handleKeyDown}>
             <div className={styles.inputField}>
+                {/* ARIA 1.2 puts combobox (and its expanded/controls state) on the text input
+                    itself, not on a wrapping element. */}
                 <input
                     ref={inputRef}
-                    id={props.id}
+                    id={rootId}
                     type="text"
+                    role="combobox"
                     className={styles.selectedValue}
                     value={inputText}
                     placeholder={props.placeholder}
                     disabled={disabled}
                     onInput={handleTextChange}
                     onClick={handleInputClick}
+                    aria-expanded={isOpen}
                     aria-autocomplete="list"
                     aria-controls={listboxId}
-                    aria-activedescendant={
-                        isOpen && filtered[safeHighlight] && props.id
-                            ? `${props.id}-option-${safeHighlight}`
-                            : undefined
-                    }
+                    aria-activedescendant={activeOptionId}
                 />
                 <svg
                     className={styles.arrowIcon}
@@ -267,7 +265,7 @@ function SearchableDropdownInner<T>(props: InnerProps<T>) {
                     {filtered.map((option, index) => (
                         <li
                             key={option.value}
-                            id={props.id ? `${props.id}-option-${index}` : undefined}
+                            id={`${rootId}-option-${index}`}
                             role="option"
                             aria-selected={index === safeHighlight}
                             className={`${styles.listboxItem} ${index === safeHighlight ? styles.highlighted : ""}`}
